@@ -216,7 +216,7 @@ app.layout = dbc.Container([
 def update_product(p):
     print('update_product')
     if p is not None:
-        response = requests.post(f'{url}/seacrh-products', json={'product': p})
+        response = requests.post(f'{url}/search-products', json={'product': p})
         print(f'Petition to: {url}/seacrh-products, status code: {response.status_code}')
         data = list(response.json()['data'])
     else:
