@@ -26,5 +26,5 @@ python app.py
 pip install dash
 pip install dash-bootstrap-components
 pip install requests
-pip install numpy
+pip install pandas
 ```

@@ -7,27 +7,18 @@ colums = ['Código', 'Inventario actual', 'Tiempo de entrega', 'Mínimo de compr
 colums_optiones = ['Real vendido', 'Tiempo de entrega',
                    'Inventario actual', 'Minimo de compra']
 
-products = ['BOTANA',
-            'DULCES',
-            'ABARROTES',
-            'BEBIDAS',
-            'PANADERIA Y REPORTERIA',
-            'LACTEOS Y EMBUTIDOS',
-            'SERVICIOS Y LIMPIEZA',
-            'FRUTAS Y VERDURAS',
-            'QUESOS',
-            'CARNES Y AVES',
-            'ALMACEN COCINA',
-            'SECOS Y CEREALES',
-            'CERVEZAS',
-            'CIGARROS',
-            'PESCADOS Y MARISCOS',
-            'ESPECIAS',
-            'HELADOS',
-            'VINOS Y LICORES']
-
-
 default_products = {
-            'data': [
-            ]
-        }, 0, json.dumps({}, default=str), json.dumps({}, default=str)
+    'data': [
+    ]
+}, 0, json.dumps({'data': []}, default=str), json.dumps({'data': []}, default=str), ''
+
+
+def clean_values_pronostic():
+    return 0, 0, 0, 0, 0
+
+
+def validation_none(comprobation):
+    return None in comprobation.values()
+
+def validation_cero(values):
+    return 0 in values

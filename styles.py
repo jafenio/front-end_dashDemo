@@ -1,6 +1,6 @@
 colorsFigure = {
-    'background': '#073642',
-    'text': '#7FDBFF'
+    'background': '#eeeeee',
+    'text': '#212F3D'
 }
 
 style_input = {
@@ -12,7 +12,7 @@ style_input = {
     'background': '#eeeeee'
 }
 
-style_select = {'textAlign': 'center'}
+style_select = {'textAlign': 'center', 'background-color': '#eeeeee'}
 
 style_title = {'padding': '3%', 'textAlign': 'center'}
 

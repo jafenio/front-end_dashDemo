@@ -1,22 +1,29 @@
-from dash import Dash, dcc, html
+from dash import Dash, dcc, html, ctx
 from dash.dependencies import Input, Output
-from styles import style_input, style_label, style_output, style_select, style_title
-from utils import colums, colums_optiones, products, default_products
+from styles import style_input, style_label, style_output, style_select, style_title, colorsFigure
+from utils import colums, colums_optiones, default_products, clean_values_pronostic, validation_none, validation_cero
 from math import ceil
 import dash_bootstrap_components as dbc
+import plotly.graph_objects as go
 import json
 import requests
 import os
 
 url = str(os.environ['BACKEND_URL'])
 
+
 def get_category_products():
     response = requests.get(f'{url}/category-products')
-    print(f'Petition to: {url}/category-products, status code: {response.status_code}')
+    print(
+        f'Petition to: {url}/category-products, status code: {response.status_code}')
     data = list(response.json()['data'])
-    return data
+    output = []
+    for i in data:
+        output.append({"label": i, "value": i})
+    return output
 
-app = Dash(external_stylesheets=[dbc.themes.SIMPLEX])
+
+app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 app.layout = dbc.Container([
     dbc.Row([
@@ -28,23 +35,19 @@ app.layout = dbc.Container([
     ]),
     dbc.Row([
         dbc.Col(
-            html.Div(
-                dcc.Dropdown(
+            html.Div([
+                dbc.Select(
                     id='category',
                     options=get_category_products(),
-                    placeholder='Selecciona una categoría',
                     style=style_select
                 )
-            )
+            ]), align='center'
         ),
         dbc.Col(
             html.Div([
-                dcc.Dropdown(
+                dbc.Select(
                     id='drop_product',
                     options=[],
-                    value=[],
-                    multi=False,
-                    placeholder="Seleccione un producto",
                     style=style_select
                 )
             ]), align='center'
@@ -74,7 +77,7 @@ app.layout = dbc.Container([
         dbc.Col(
             html.Div([
                 html.H5(colums_optiones[2], style=style_label),
-                dcc.Input(
+                dbc.Input(
                     id='i_inv_actual',
                     placeholder='0',
                     type="number",
@@ -86,7 +89,7 @@ app.layout = dbc.Container([
         dbc.Col(
             html.Div([
                 html.H5(colums_optiones[3], style=style_label),
-                dcc.Input(
+                dbc.Input(
                     id='minimo_compra',
                     placeholder='0',
                     type="number",
@@ -98,7 +101,7 @@ app.layout = dbc.Container([
         dbc.Col(
             html.Div([
                 html.H5(colums_optiones[1], style=style_label),
-                dcc.Input(
+                dbc.Input(
                     id='i_tiem_entrega',
                     placeholder='0',
                     type="number",
@@ -215,14 +218,17 @@ app.layout = dbc.Container([
 )
 def update_product(p):
     print('update_product')
-    if p is not None:
-        response = requests.post(f'{url}/search-products', json={'product': p})
-        print(f'Petition to: {url}/seacrh-products, status code: {response.status_code}')
-        data = list(response.json()['data'])
-    else:
-        print(f'Not petition to: {url}/seacrh-products')
+    result = [{'label': 'Selecciona una de las siguientes opciones', 'value': ''}]
+    if p is None:
         data = []
-    return [{'label': v, 'value': v} for v in data]
+    response = requests.post(f'{url}/search-products', json={'product': p})
+    print(
+        f'Petition to: {url}/seacrh-products, status code: {response.status_code}')
+    data = list(response.json()['data'])
+
+    for v in data:
+        result.append({'label': v, 'value': v})
+    return result
 
 # Generamos la grafica de forma dinamica.
 
@@ -232,43 +238,51 @@ def update_product(p):
     Output('e_medio', component_property='children'),
     Output('prediction_values', 'data'),
     Output('real_values', 'data'),
+    Output('codigo', component_property='children'),
     Input('drop_product', 'value'),
     Input('category', 'value')
 )
-
 def grah_update(drop_product, category):
-    print('grah_update')
-    if isinstance(drop_product, str) and isinstance(category, str):
-        response = requests.post(f'{url}/prediction-product', json={'product': drop_product})
-        print(f'Petition to: {url}/prediction-product, status code: {response.status_code}')
-        data = response.json()['data']
-        clean_ceros = {'data': list(
-            filter(lambda x: x != 0.0, list(data['prediction-values'])))}
-        data_real = {'data': list(data['real-values'])}
-        return {
-            'data': [
-                {'x': data['days'], 'y': data['real-values'], 'type': 'line', 'name': 'Datos'},
-                {'x': data['days'], 'y': data['prediction-values'], 'type': 'line', 'name': 'Predicción'},
-                {'x': data['days'], 'y': data['training-values'], 'type': 'line', 'name': 'Entrenamiento'}
-            ],
-            'layout': {
-                'title': data['name']
-            }
-        }, data['mean-square-error'], json.dumps(clean_ceros, default=str), json.dumps(data_real, default=str)
-    else:
-        print(f'Not petition to: {url}/prediction-product')
-        return default_products
-        
-
-# Rellenado de forma dinamica el codigo.
+    triggered_id = ctx.triggered_id
+    if triggered_id == 'drop_product':
+        return draw_graph(drop_product)
+    return reset_graph(category)
 
 
-@app.callback(
-    Output('codigo', component_property='children'),
-    Input('drop_product', 'value')
-)
-def update_codigo(value):
-    return value
+def draw_graph(drop_product):
+    response = requests.post(
+        f'{url}/prediction-product', json={'product': drop_product})
+    print(
+        f'Petition to: {url}/prediction-product, status code: {response.status_code}')
+    data = response.json()['data']
+    clean_ceros = {'data': list(
+        filter(lambda x: x != 0.0, list(data['prediction-values'])))}
+    data_real = {'data': list(data['real-values'])}
+    # Comienza el proceso de graficacion
+    values_day = data['days'][:-3]
+    values_real = data['real-values']
+    values_prediction = [0, 0] + data['prediction-values']
+    post_training = [0 for v in range(
+        len(data['prediction-values']) - len(data['training-values']))]
+    values_trainin = data['training-values'] + post_training
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=values_day, y=values_prediction,
+                             mode='lines', name='Prediccion'))
+    fig.add_trace(go.Scatter(x=values_day, y=values_trainin,
+                             mode='lines', name='Entrenamiento'))
+    fig.add_trace(go.Scatter(x=values_day, y=values_real,
+                             mode='lines', name='Real'))
+    fig.update_layout(
+        plot_bgcolor=colorsFigure['background'],
+        paper_bgcolor=colorsFigure['background'],
+        font_color=colorsFigure['text']
+    )
+    return fig, data['mean-square-error'], json.dumps(clean_ceros, default=str), json.dumps(data_real, default=str), drop_product
+
+
+def reset_graph(category):
+    print('reset_graph, option: ', category)
+    return default_products
 
 # Detonante de Tiempo de entrega.
 
@@ -302,7 +316,7 @@ def procces_minimo_compra(value):
         value = 0
     return value
 
-# Detonante de Pronostico de venta.
+# Detonante de Unidades que se deben de comprar.
 
 
 @app.callback(
@@ -320,44 +334,54 @@ def procces_minimo_compra(value):
 )
 def procces_pronostico_venta(i_tiem_entrega, drop_product, i_inv_actual, minimo_compra, real_values, prediction_values):
     # Variables a retonar
-    pronostic = 0
-    unidad = 0
-    dif_pre_real = 0
-    por_per_real = 0
     real_vendido = 0
-    # Verificador
-    if i_tiem_entrega is None or i_inv_actual is None or real_values is None or drop_product is None or prediction_values is None or minimo_compra is None:
-        return pronostic, unidad, dif_pre_real, por_per_real, real_vendido
-    else:
-        get_real_values = json.loads(real_values)['data']
-        clean_ceros = json.loads(prediction_values)['data']
-        diferentia = len(get_real_values) - len(clean_ceros) - 2
-        # Calculamos el real vendido
-        for i in range(diferentia, diferentia + i_tiem_entrega):
-            real_vendido += int(float(get_real_values[i]))
-        real_vendido = int(float(real_vendido))
-        # Calculamos el pronostico de venta
-        for i in range(i_tiem_entrega):
-            pronostic += clean_ceros[i]
-        pronostic = ceil(round(pronostic, 6))
-        if(int(pronostic) < int(minimo_compra)):
-            pronostic = minimo_compra
-        # Calculamos las unidades a comprar
-        unidad = pronostic - i_inv_actual
-        unidad = round(unidad, 6)
-        if(int(unidad) < int(minimo_compra)):
-            unidad = minimo_compra
-        # Calculamos la diferencia entre lo predecido y lo real
-        dif_pre_real = pronostic - real_vendido
-        dif_pre_real = round(dif_pre_real, 6)
-        # Calculamos el porcentaje entre lo predecido y lo real
-        try:
-            diferentia = ((pronostic * 100) / real_vendido) - 100
-            por_per_real = round(diferentia, 2)
-        except ZeroDivisionError:
-            por_per_real = 0
-        por_per_real = f'{por_per_real}%'
-        return pronostic, unidad, dif_pre_real, por_per_real, real_vendido
+    pronostic = 0
+    por_per_real = 0
+    # Verificamos que ninguna entrada este en None.
+    validation = {
+        'i_tiem_entrega': i_tiem_entrega,
+        'drop_product': drop_product,
+        'i_inv_actual': i_inv_actual,
+        'minimo_compra': minimo_compra
+    }
+    comprobation_none = validation_none(validation)
+    if comprobation_none:
+        return clean_values_pronostic()
+    get_real_values = json.loads(real_values)['data']
+    clean_ceros = json.loads(prediction_values)['data']
+    # Verificamos que los datos reales y las predicciones no esten vacias.
+    comprobation_cero = validation_cero(
+        [len(get_real_values), len(clean_ceros)])
+    if comprobation_cero:
+        return clean_values_pronostic()
+    diferentia = len(get_real_values) - len(clean_ceros) - 2
+    # Calculamos el real vendido
+    for i in range(diferentia, diferentia + i_tiem_entrega):
+        real_vendido += int(float(get_real_values[i]))
+    real_vendido = int(float(real_vendido))
+    # Calculamos el pronostico de venta
+    for i in range(i_tiem_entrega):
+        pronostic += clean_ceros[i]
+    pronostic = ceil(round(pronostic, 6))
+    if int(pronostic) < int(minimo_compra):
+        pronostic = minimo_compra
+    # Calculamos las unidades a comprar
+    unidad = pronostic - i_inv_actual
+    unidad = round(unidad, 6)
+    if int(unidad) < int(minimo_compra):
+        unidad = minimo_compra
+    # Calculamos la diferencia entre lo predecido y lo real
+    dif_pre_real = pronostic - real_vendido
+    dif_pre_real = round(dif_pre_real, 6)
+    # Calculamos el porcentaje entre lo predecido y lo real
+    try:
+        diferentia = ((pronostic * 100) / real_vendido) - 100
+        por_per_real = round(diferentia, 2)
+    except ZeroDivisionError:
+        por_per_real = 0
+    por_per_real = f'{por_per_real}%'
+    return pronostic, unidad, dif_pre_real, por_per_real, real_vendido
+
 
 if __name__ == '__main__':
-    app.run_server(debug=False, host="0.0.0.0", port=3000)
+    app.run_server(debug=True, host='0.0.0.0', port=3000)
